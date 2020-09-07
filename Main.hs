@@ -14,17 +14,18 @@ main = do
   contents <- readFile filePath
   either putStrLn generateOutput $ Row.parseData (removeFirstLine contents)
 
+-- TODO change functions from [Row] -> a to [Row] -> String
 generateOutput :: [Row] -> IO ()
 generateOutput rows = do
   putStrLn "\n[General Data]"
-  printInfo "Total people (#): " length
+  printInfo "Total people (#): " (show . length)
   printInfo "Total men (#):" men
   printInfo "Total women (#):" women
-  printInfo "Average life for men (years):" (averageLife ((== Male) . Row.sex))
-  printInfo "Average life for women (years):" (averageLife ((== Female) . Row.sex))
-  printInfo "Average life length (years): " (averageLife everything)
-  printInfo "Shortest life (days): " shortestLife
-  printInfo "Longest life (years): " longestLife
+  printInfo "Average life for men (years):" (show . averageLife ((== Male) . Row.sex))
+  printInfo "Average life for women (years):" (show . averageLife ((== Female) . Row.sex))
+  printInfo "Average life length (years): " (show . averageLife everything)
+  printInfo "Shortest life (days): " (show . shortestLife)
+  printInfo "Longest life (years): " (show . longestLife)
 
   putStrLn "\n[Plots]"
   printInfo "Age/Deaths for men (Years/#): " (deathsPerNumber ((== Male) . Row.sex))
@@ -34,14 +35,14 @@ generateOutput rows = do
   putStrLn "\n[Occupations]"
   printInfo "Occupations: (Occupation/#): " occupations
   where
-    printInfo :: Show a => String -> ([Row] -> a) -> IO ()
-    printInfo msg f = putStrLn $ msg ++ show (f rows)
+    printInfo :: String -> ([Row] -> String) -> IO ()
+    printInfo msg f = do
+      putStrLn m
+      appendFile "output.txt" m
+      where m = msg ++ f rows
 
-men :: [Row] -> Int
-men = count Male . map Row.sex
-
-women :: [Row] -> Int
-women = count Female . map Row.sex
+men = show . count Male . map Row.sex
+women = show . count Female . map Row.sex
 
 averageLife :: (Row -> Bool) -> [Row] -> Double
 averageLife p rows = (fromIntegral $ sum $ map Row.years filtered) / (List.genericLength filtered)
@@ -56,15 +57,29 @@ shortestLife rows = (Row.years shortest * 365) + (maybe 0 (*30) $ Row.months sho
 longestLife :: [Row] -> Int
 longestLife = maximum . fmap Row.years
 
-deathsPerNumber :: (Row -> Bool) -> [Row] -> [(Int, Int)]
-deathsPerNumber p rows = map (\y -> (y, count y $ map Row.years $ filter p rows)) [0 .. 100]
+deathsPerNumber :: (Row -> Bool) -> [Row] -> String
+deathsPerNumber p rows = toString $ map (\y -> (y, count y $ map Row.years $ filter p rows)) [0 .. 100]
+  where
+    toString :: [(Int, Int)] -> String
+    toString = unwords . map show
 
-occupations :: [Row] -> [(String, Int)]
-occupations = reverse . List.sortOn snd . map (\os -> (occupationString $ head os, length os)) . List.group . List.sort . map Row.occupation
+occupations :: [Row] -> String
+occupations =
+  toString
+  . reverse
+  . List.sortOn snd
+  . map (\os -> (occupationString $ head os, length os))
+  . List.group
+  . List.sort
+  . map (fmap (\o -> if o == "gyermek" then "gyerek" else o))
+  . map Row.occupation
   where
     occupationString :: Maybe String -> String
     occupationString Nothing = "Not Specified"
     occupationString (Just occ) = occ
+
+    toString :: [(String, Int)] -> String
+    toString = unwords . map (\(s, i) -> "(" ++ s ++ ", " ++ show i ++ ")")
 
 rowComparator :: Row -> Row -> Ordering
 rowComparator a b
